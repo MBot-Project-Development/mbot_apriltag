@@ -5,16 +5,18 @@ import atexit
 import numpy as np
 from apriltag import apriltag
 import math
+import lcm
+from mbot_lcm_msgs.mbot_apriltag_t import mbot_apriltag_t
 import threading
 
 """
-This script displays the video live stream with apriltag detection to browser.
-The pose estimation will display as well.
+This script publish apriltag lcm message
+You can also preview the video stream by enabling preview = True
 visit: http://your_mbot_ip:5001/video
 """
 
 class Camera:
-    def __init__(self, camera_id, width, height, framerate):
+    def __init__(self, camera_id, width, height, framerate, preview):
         self.cap = cv2.VideoCapture(self.camera_pipeline(camera_id, width, height, framerate))
         self.detector = apriltag("tagCustom48h12", threads=1)
         self.skip_frames = 5  # Process every 5th frame for tag detection
@@ -37,6 +39,8 @@ class Camera:
             [ self.small_tag_size/2, -self.small_tag_size/2, 0], # Bottom-right corner
             [-self.small_tag_size/2, -self.small_tag_size/2, 0], # Bottom-left corner
         ], dtype=np.float32)
+        self.lcm = lcm.LCM("udpm://239.255.76.67:7667?ttl=0")
+        self.preview = preview
 
     def camera_pipeline(self, i, w, h, framerate):
         """
@@ -63,6 +67,9 @@ class Camera:
         format=(string)BGR ! \
         appsink"
 
+    def camera.detect(self):
+        self.publish_apriltag()
+
     def generate_frames(self):
         while True:
             self.frame_count += 1
@@ -84,7 +91,7 @@ class Camera:
                     except RuntimeError as e:
                         if "Unable to create" in str(e) and attempt < max_retries - 1:
                             print(f"Detection failed due to thread creation issue, retrying... Attempt {attempt + 1}")
-                            time.sleep(0.2)  # back off for a moment
+                            time.sleep(1)  # Optional: back off for a moment
                         else:
                             raise  # Re-raise the last exception if retries exhausted
 
@@ -117,11 +124,26 @@ class Camera:
                     vertical_pos = 40*visible_tags
                     cv2.putText(frame, pos_text, (10, vertical_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (220, 0, 0), 2)
 
+
             # Encode the frame
             ret, buffer = cv2.imencode('.jpg', frame)
             frame = buffer.tobytes()
             yield (b'--frame\r\n'
                     b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+    def publish_apriltag(self):
+        """
+        Publish the apriltag message:
+            int64_t utime;
+            int32_t tag_id;
+            pose3D_t pose;
+        """
+
+        # Create the apriltag message
+        msg = mbot_apriltag_t()
+        msg.tag_id = 3
+        # Publish the velocity command
+        self.lcm.publish("MBOT_APRILTAG", msg.encode())
 
     def cleanup(self):
         print("Releasing camera resources")
@@ -157,8 +179,11 @@ if __name__ == '__main__':
     camera_id = 0
     image_width = 1280
     image_height = 720
-    frame_rate = 20
-    camera = Camera(camera_id, image_width, image_height, frame_rate) 
+    frame_rate = 10
+    preview = True  # whether to forward video stream to browser
+    camera = Camera(camera_id, image_width, image_height, frame_rate, preview) 
     atexit.register(camera.cleanup)
-    app.run(host='0.0.0.0', port=5001)
+    camera.detect()
+    if preview:
+        app.run(host='0.0.0.0', port=5001)
 

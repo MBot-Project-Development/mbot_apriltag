@@ -33,7 +33,6 @@ git clone https://github.com/MBot-Project-Development/mbot_apriltag.git
 - apriltag_streamer.py
     - Run `python3 apriltag_streamer.py` then visit `http://your_mbot_ip:5001/video`
     - It runs apriltag detection, when tag is detected, pose estimation will be printed on the screen.
-     ![](example.png)
 
 ### Troubleshooting
 If encounter error during runtime:"ImportError: libapriltag.so.3: cannot open shared object file: No such file or directory"

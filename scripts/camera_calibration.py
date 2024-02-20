@@ -61,15 +61,8 @@ print(f"Mean reprojection error: {mean_error} (ideally < 0.5)")
 # Save the camera matrix and distortion coefficients using np.savez
 np.savez('cam_calibration_data.npz', camera_matrix=mtx, dist_coeffs=dist)
 
-# Save the camera calibration results to cam_config.txt file
-# with open('cam_config.txt', 'w') as file:
-#     file.write("Camera matrix:\n")
-#     file.write(np.array2string(mtx) + "\n")
-#     file.write("Distortion coefficients:\n")
-#     file.write(np.array2string(dist) + "\n")
-#     file.write("Rotation Vectors:\n")
-#     for rvec in rvecs:
-#         file.write(np.array2string(rvec) + "\n")
-#     file.write("Translation Vectors:\n")
-#     for tvec in tvecs:
-#         file.write(np.array2string(tvec) + "\n")
+# Print the camera matrix
+# print("Camera Matrix:")
+# print(mtx)
+
+print("Result saved in cam_calibration_data.npz!")

@@ -1,4 +1,3 @@
-from flask import Flask, Response
 import cv2
 import time
 import atexit
@@ -6,17 +5,16 @@ import numpy as np
 from apriltag import apriltag
 import math
 import lcm
+from mbot_lcm_msgs.mbot_apriltag_array_t import mbot_apriltag_array_t
 from mbot_lcm_msgs.mbot_apriltag_t import mbot_apriltag_t
 import threading
 
 """
 This script publish apriltag lcm message
-You can also preview the video stream by enabling preview = True
-visit: http://your_mbot_ip:5001/video
 """
 
 class Camera:
-    def __init__(self, camera_id, width, height, framerate, preview):
+    def __init__(self, camera_id, width, height, framerate):
         self.cap = cv2.VideoCapture(self.camera_pipeline(camera_id, width, height, framerate))
         self.detector = apriltag("tagCustom48h12", threads=1)
         self.skip_frames = 5  # Process every 5th frame for tag detection
@@ -40,7 +38,6 @@ class Camera:
             [-self.small_tag_size/2, -self.small_tag_size/2, 0], # Bottom-left corner
         ], dtype=np.float32)
         self.lcm = lcm.LCM("udpm://239.255.76.67:7667?ttl=0")
-        self.preview = preview
 
     def camera_pipeline(self, i, w, h, framerate):
         """
@@ -67,16 +64,12 @@ class Camera:
         format=(string)BGR ! \
         appsink"
 
-    def camera.detect(self):
-        self.publish_apriltag()
-
-    def generate_frames(self):
+    def detect(self):
         while True:
-            self.frame_count += 1
             success, frame = self.cap.read()
             if not success:
                 break
-
+            self.frame_count += 1
             # Process for tag detection only every 5th frame
             if self.frame_count % self.skip_frames == 0:
                 # Convert frame to grayscale for detection
@@ -91,66 +84,54 @@ class Camera:
                     except RuntimeError as e:
                         if "Unable to create" in str(e) and attempt < max_retries - 1:
                             print(f"Detection failed due to thread creation issue, retrying... Attempt {attempt + 1}")
-                            time.sleep(1)  # Optional: back off for a moment
+                            time.sleep(0.1)  # Optional: back off for a moment
                         else:
                             raise  # Re-raise the last exception if retries exhausted
-
-            if self.detections:
-                visible_tags = 0
-                for detect in self.detections:
-                    visible_tags += 1
-
-                    # Draw the corners of the tag
-                    corners = np.array(detect['lb-rb-rt-lt'], dtype=np.int32).reshape((-1, 1, 2))
-                    cv2.polylines(frame, [corners], isClosed=True, color=(0, 255, 0), thickness=2)
-
-                    # Pose estimation for detected tag
-                    if detect['id'] < 10: # big tag
-                        image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
-                        retval, rvec, tvec = cv2.solvePnP(self.object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
-
-                    if detect['id'] > 10: # small tag at center
-                        image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
-                        retval, rvec, tvec = cv2.solvePnP(self.small_object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
-
-                    # Convert rotation vector to a rotation matrix
-                    rotation_matrix, _ = cv2.Rodrigues(rvec)
-
-                    # Calculate Euler angles 
-                    roll, pitch, yaw = calculate_euler_angles_from_rotation_matrix(rotation_matrix)
-
-                    pos_text = f"Tag ID {detect['id']}: x={tvec[0][0]:.2f}, y={tvec[1][0]:.2f}, z={tvec[2][0]:.2f}"
-                    # orientation_text = f"Orientation: roll={roll:.2f}, pitch={pitch:.2f}, yaw={yaw:.2f}"
-                    vertical_pos = 40*visible_tags
-                    cv2.putText(frame, pos_text, (10, vertical_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (220, 0, 0), 2)
-
-
-            # Encode the frame
-            ret, buffer = cv2.imencode('.jpg', frame)
-            frame = buffer.tobytes()
-            yield (b'--frame\r\n'
-                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+            
+                self.publish_apriltag()
 
     def publish_apriltag(self):
         """
-        Publish the apriltag message:
-            int64_t utime;
-            int32_t tag_id;
-            pose3D_t pose;
+        Publish the apriltag message
         """
+        msg = mbot_apriltag_array_t()
+        msg.array_size = len(self.detections)
+        msg.detections = []
+        if msg.array_size > 0:
+            for detect in self.detections:
+                # Pose estimation for detected tag
+                image_points = np.array(detect['lb-rb-rt-lt'], dtype=np.float32)
+                if detect['id'] < 10: # big tag
+                    retval, rvec, tvec = cv2.solvePnP(self.object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
 
-        # Create the apriltag message
-        msg = mbot_apriltag_t()
-        msg.tag_id = 3
-        # Publish the velocity command
-        self.lcm.publish("MBOT_APRILTAG", msg.encode())
+                if detect['id'] > 10: # small tag at center
+                    retval, rvec, tvec = cv2.solvePnP(self.small_object_points, image_points, self.camera_matrix, self.dist_coeffs, flags=cv2.SOLVEPNP_IPPE_SQUARE)
+
+                # Convert rotation vector  to a rotation matrix
+                rotation_matrix, _ = cv2.Rodrigues(rvec)
+         
+                # # Calculate Euler angles: roll, pitch, yaw - x, y, z in degrees
+                # for apriltag, x is horizontal, y is vertical, z is outward
+                roll, pitch, yaw = rotation_matrix_to_euler_angles(rotation_matrix)
+                quaternion = rotation_matrix_to_quaternion(rotation_matrix)
+
+                apriltag = mbot_apriltag_t()
+                apriltag.tag_id = detect['id']
+                apriltag.pose.x = tvec[0][0]
+                apriltag.pose.y = tvec[1][0]
+                apriltag.pose.z = tvec[2][0]
+                apriltag.pose.angles_rpy = [roll, pitch, yaw]
+                apriltag.pose.angles_quat = quaternion
+                msg.detections.append(apriltag)
+
+        self.lcm.publish("MBOT_APRILTAG_ARRAY", msg.encode())
 
     def cleanup(self):
         print("Releasing camera resources")
         if self.cap and self.cap.isOpened():
             self.cap.release()
 
-def calculate_euler_angles_from_rotation_matrix(R):
+def rotation_matrix_to_euler_angles(R):
     """
     Calculate Euler angles (roll, pitch, yaw) from a rotation matrix.
     Assumes the rotation matrix uses the XYZ convention.
@@ -169,10 +150,25 @@ def calculate_euler_angles_from_rotation_matrix(R):
 
     return np.rad2deg(x), np.rad2deg(y), np.rad2deg(z)  # Convert to degrees
 
-app = Flask(__name__)
-@app.route('/video')
-def video():
-    return Response(camera.generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+def rotation_matrix_to_quaternion(R):
+    """
+    Convert a rotation matrix to a quaternion.
+    
+    Args:
+        R (numpy.ndarray): The rotation matrix.
+        
+    Returns:
+        numpy.ndarray: The quaternion [qx, qy, qz, qw].
+    """
+    m00, m01, m02, m10, m11, m12, m20, m21, m22 = R.flat
+    qw = np.sqrt(max(0, 1 + m00 + m11 + m22)) / 2
+    qx = np.sqrt(max(0, 1 + m00 - m11 - m22)) / 2
+    qy = np.sqrt(max(0, 1 - m00 + m11 - m22)) / 2
+    qz = np.sqrt(max(0, 1 - m00 - m11 + m22)) / 2
+    qx = np.copysign(qx, m21 - m12)
+    qy = np.copysign(qy, m02 - m20)
+    qz = np.copysign(qz, m10 - m01)
+    return np.array([qx, qy, qz, qw])
 
 if __name__ == '__main__':
     # image width and height here should align with save_image.py
@@ -180,10 +176,8 @@ if __name__ == '__main__':
     image_width = 1280
     image_height = 720
     frame_rate = 10
-    preview = True  # whether to forward video stream to browser
-    camera = Camera(camera_id, image_width, image_height, frame_rate, preview) 
+    camera = Camera(camera_id, image_width, image_height, frame_rate) 
     atexit.register(camera.cleanup)
     camera.detect()
-    if preview:
-        app.run(host='0.0.0.0', port=5001)
+
 

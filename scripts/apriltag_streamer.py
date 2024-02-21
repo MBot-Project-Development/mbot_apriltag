@@ -112,10 +112,10 @@ class Camera:
                     # Calculate Euler angles 
                     roll, pitch, yaw = calculate_euler_angles_from_rotation_matrix(rotation_matrix)
 
-                    pos_text = f"Tag ID {detect['id']}: x={tvec[0][0]:.2f}, y={tvec[1][0]:.2f}, z={tvec[2][0]:.2f}"
-                    # orientation_text = f"Orientation: roll={roll:.2f}, pitch={pitch:.2f}, yaw={yaw:.2f}"
+                    pos_text = f"Tag ID {detect['id']}: x={tvec[0][0]:.2f}, y={tvec[1][0]:.2f}, z={tvec[2][0]:.2f},"
+                    orientation_text = f" roll={roll:.2f}, pitch={pitch:.2f}, yaw={yaw:.2f}"
                     vertical_pos = 40*visible_tags
-                    cv2.putText(frame, pos_text, (10, vertical_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (220, 0, 0), 2)
+                    cv2.putText(frame, pos_text+orientation_text, (10, vertical_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (220, 0, 0), 2)
 
             # Encode the frame
             ret, buffer = cv2.imencode('.jpg', frame)

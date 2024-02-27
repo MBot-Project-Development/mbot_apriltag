@@ -10,7 +10,7 @@ from mbot_lcm_msgs.mbot_apriltag_t import mbot_apriltag_t
 import threading
 
 """
-This script publish apriltag lcm message
+This script publish apriltag lcm message to MBOT_APRILTAG_ARRAY
 """
 
 class Camera:

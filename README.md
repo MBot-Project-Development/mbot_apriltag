@@ -1,9 +1,14 @@
-# mbot_apriltag_project
+# mbot_apriltag
 
-## How to use 
-### Installation
-1. Install Apriltag Library
-Directly install from the official [github repo](https://github.com/AprilRobotics/apriltag):
+## Description
+This project offers tools for camera calibration and Apriltag pose estimation, specifically tailored for use with the MBot equipped with a **Jetson Nano**.
+
+The provided scripts enable users to:
+- Stream live camera feeds directly to a browser, allowing for real-time viewing and interaction.
+- Publish and subscribe to Apriltag LCM messages.
+## Installation
+### Install Apriltag Library
+1. Directly install from the official [github repo](https://github.com/AprilRobotics/apriltag):
     ```bash
     git clone https://github.com/AprilRobotics/apriltag.git
     ```
@@ -20,19 +25,23 @@ Directly install from the official [github repo](https://github.com/AprilRobotic
 git clone https://github.com/MBot-Project-Development/mbot_apriltag.git
 ```
 
+## Usage and Features
 ### Run scripts
-- video_streamer.py 
+- `python3 video_streamer.py`
+    - Visit `http://your_mbot_ip:5001/video`
     - Only shows the video stream to test your camera
-    - Run `python3 video_streamer.py` then visit `http://your_mbot_ip:5001/video`
-- save_image.py 
+- `python3 save_image.py`
+    - Visit `http://your_mbot_ip:5001`
     - Show the video stream to save image to `/images` for camera calibration
-    - Run `python3 save_image.py` then visit `http://your_mbot_ip:5001`
-- camera_calibration.py 
-    - Use the images from `/images` output result as `cam_calibration_data.npz`. The result will be used directly by apriltag_streamer.py you don't have to modify anything.
-    - Run `python3 camera_calibration.py`
-- apriltag_streamer.py
-    - Run `python3 apriltag_streamer.py` then visit `http://your_mbot_ip:5001/video`
+- `python3 camera_calibration.py`
+    - Use the images from `/images` and output calibration result as `cam_calibration_data.npz`. The result will be used directly by apriltag_streamer.py you don't have to modify anything.
+- `python3 apriltag_streamer.py`
+    - Visit `http://your_mbot_ip:5001/video`
     - It runs apriltag detection, when tag is detected, pose estimation will be printed on the screen.
+- `python3 apriltag_lcm_publisher.py`
+    - Publish apriltag lcm message over `MBOT_APRILTAG_ARRAY`
+- `python3 apriltag_lcm_subscriber.py`
+    - Listen to `MBOT_APRILTAG_ARRAY` for apriltag lcm message
 
 ### Troubleshooting
 If encounter error during runtime:"ImportError: libapriltag.so.3: cannot open shared object file: No such file or directory"
@@ -56,6 +65,6 @@ If encounter error during runtime:"ImportError: libapriltag.so.3: cannot open sh
     sudo ldconfig
     ```
 
-### Author and maintainer
+## Authors and maintainers
 - The original author of this project is Shaw Sun.
 - The current maintainer of this project is Shaw Sun. Please direct all questions regarding support, contributions, and issues to the maintainer. The maintainer is responsible for overseeing the project's development, reviewing and merging contributions, and ensuring the project's ongoing stability and relevance.
